@@ -1,0 +1,35 @@
+name: SOTA technology newsletter
+'on':
+  schedule:
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: tech-newsletter
+  cancel-in-progress: false
+jobs:
+  newsletter:
+    runs-on: ubuntu-latest
+    environment: STOCK_LIST
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Claude Code
+        run: npm install --global @anthropic-ai/claude-code
+      - name: Generate and deliver one bilingual newsletter
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+        run: python scripts/tech_newsletter.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tech-newsletter
+          path: tech-newsletter.txt
+          if-no-files-found: ignore
