@@ -3108,3 +3108,23 @@ print(json.dumps({{"sentiment_score": 60}}))
     assert len(intervals) == 2
     intervals.sort(key=lambda item: item["start"])
     assert intervals[1]["start"] >= intervals[0]["end"]
+
+
+@pytest.mark.parametrize("preset_id", ["claude_code_cli", "codex_cli", "opencode_cli"])
+def test_subscription_token_only_reaches_claude(monkeypatch, tmp_path, preset_id):
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "test-subscription-token")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-telegram-secret")
+    backend = LocalCliGenerationBackend(_config(), preset_id=preset_id)
+    child_env = build_local_cli_env()
+    child_env.update(backend._build_preset_child_env(tmp_path, {}))
+    assert ("CLAUDE_CODE_OAUTH_TOKEN" in child_env) == (preset_id == "claude_code_cli")
+    assert "TELEGRAM_BOT_TOKEN" not in child_env
+    assert "test-subscription-token" not in redact_diagnostic_text(
+        "CLAUDE_CODE_OAUTH_TOKEN=test-subscription-token"
+    )
+
+
+def test_missing_subscription_token_keeps_local_auth(monkeypatch, tmp_path):
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    backend = LocalCliGenerationBackend(_config(), preset_id="claude_code_cli")
+    assert backend._build_preset_child_env(tmp_path, {}) == {}
