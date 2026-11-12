@@ -2622,6 +2622,10 @@ class LocalCliGenerationBackend(GenerationBackend):
         cwd: Path,
         diagnostics: Dict[str, Any],
     ) -> Dict[str, str]:
+        if self._preset.preset_id == CLAUDE_CODE_CLI_BACKEND_ID:
+            # Only Claude receives its explicit CI subscription credential.
+            token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
+            return {"CLAUDE_CODE_OAUTH_TOKEN": token} if token else {}
         if self._preset.preset_id != OPENCODE_CLI_BACKEND_ID:
             return {}
         diagnostics["opencode_child_env_hardened"] = True
