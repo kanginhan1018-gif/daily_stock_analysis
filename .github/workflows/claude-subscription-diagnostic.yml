@@ -1,0 +1,25 @@
+name: Claude subscription diagnostic
+'on':
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - name: Install official Claude Code
+      run: npm install --global @anthropic-ai/claude-code
+    - name: Diagnose Claude subscription authentication
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      run: "python - <<'PYTHON'\nimport json, os, subprocess, tempfile\ntoken = os.environ.get('CLAUDE_CODE_OAUTH_TOKEN',\
+        \ '')\nif not token:\n    raise SystemExit('Claude subscription token is missing')\nenv = {k: os.environ[k] for k\
+        \ in ('PATH', 'HOME') if k in os.environ}\nenv['CLAUDE_CODE_OAUTH_TOKEN'] = token\nwith tempfile.TemporaryDirectory()\
+        \ as cwd:\n    result = subprocess.run(\n        ['claude', '--safe-mode', '--tools', '', '--disallowedTools', 'mcp__*',\
+        \ '--strict-mcp-config', '--no-session-persistence', '--output-format', 'json', '-p', 'Return only the requested JSON.'],\n\
+        \        input='Return only {\"ok\":true}', text=True, capture_output=True,\n        cwd=cwd, env=env, timeout=60,\n\
+        \    )\ntry:\n    response = json.loads(result.stdout)\nexcept json.JSONDecodeError:\n    raise SystemExit('Claude\
+        \ returned an unexpected response; raw output withheld')\ndetails = {k: response.get(k) for k in ('is_error', 'api_error_status',\
+        \ 'terminal_reason', 'result')}\nprint(json.dumps(details, ensure_ascii=False).replace(token, '[REDACTED]'))\nraise\
+        \ SystemExit(result.returncode)\nPYTHON\n"
