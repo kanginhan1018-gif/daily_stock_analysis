@@ -56,6 +56,10 @@ jobs:
           pip install -r requirements.txt
           python -c "import futu; print('✅ futu SDK import OK')"
       
+      - name: Install Claude Code for subscription analysis
+        if: ${{ vars.GENERATION_BACKEND == 'claude_code_cli' }}
+        run: npm install --global @anthropic-ai/claude-code
+
       - name: 创建必要目录
         run: |
           mkdir -p data logs reports
@@ -65,6 +69,7 @@ jobs:
           # ==========================================
           # AI 配置
           # ==========================================
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GENERATION_BACKEND: ${{ vars.GENERATION_BACKEND || secrets.GENERATION_BACKEND }}
           GENERATION_FALLBACK_BACKEND: ${{ vars.GENERATION_FALLBACK_BACKEND || secrets.GENERATION_FALLBACK_BACKEND || 'litellm' }}
           GENERATION_BACKEND_TIMEOUT_SECONDS: ${{ vars.GENERATION_BACKEND_TIMEOUT_SECONDS || secrets.GENERATION_BACKEND_TIMEOUT_SECONDS }}
