@@ -535,3 +535,12 @@ VISION_PROVIDER_PRIORITY=gemini,anthropic,openai
 | **Ollama 报 404、`Could not get model info` 或 `api/generate/api/show`** | 误用 `OPENAI_BASE_URL` 配置 Ollama，系统会错误拼接 URL | 改用 `OLLAMA_API_BASE=http://localhost:11434` 或渠道模式（`LLM_CHANNELS=ollama` + `LLM_OLLAMA_BASE_URL`） |
 
 *进阶老手的叮嘱：如果你开启了 **Agent (深度思考网络搜索问股) 模式**，这里有个经验之谈，推荐选用如 `deepseek-v4-pro` 这种逻辑推导能力更强的大模型。如果为了省钱用小微模型跑 Agent，它逻辑能力大概率跟不上，不仅达不到预期，还会白跑一堆空流程。*
+
+
+## Claude subscription on GitHub Actions
+
+The daily workflow can use the existing `claude_code_cli` backend on GitHub-hosted runners; your computer may be off. Generate a subscription token with `claude setup-token` and save it as the repository Actions secret `CLAUDE_CODE_OAUTH_TOKEN`. Never paste it into an issue, log, or committed file.
+
+Set repository Actions variables `GENERATION_BACKEND=claude_code_cli` and `GENERATION_FALLBACK_BACKEND=claude_code_cli` to select Claude and disable paid API fallback. The workflow installs the official Claude Code CLI. Only the Claude subprocess receives the subscription token; other provider and notification credentials stay filtered out. Existing local Claude login continues to work when no token is set.
+
+First dispatch `stocks-only` with `force_run=true`, and verify a report plus Telegram delivery before relying on the schedule. Subscription usage limits and token expiration still apply. The existing schedule is weekdays at 10:00 UTC (7 PM Korea time), before US market opening; scheduled mode and market-review settings are otherwise unchanged. To roll back, restore the previous backend variables. See [Claude authentication](https://code.claude.com/docs/en/authentication).
