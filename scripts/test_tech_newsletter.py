@@ -1,8 +1,9 @@
 """Offline checks; run with python -m unittest discover -s scripts -p test_tech_newsletter.py."""
 import unittest
+import json
 from datetime import datetime, timezone
 
-from tech_newsletter import parse_feed, render
+from tech_newsletter import parse_feed, render, parse_generation
 
 
 class NewsletterTest(unittest.TestCase):
@@ -12,6 +13,17 @@ class NewsletterTest(unittest.TestCase):
         self.assertEqual(len(parse_feed(raw, 'RSS', now)), 1)
         atom = b'<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Atom</title><link href="https://example.org/atom"/><updated>2026-11-11T00:00:00Z</updated></entry></feed>'
         self.assertEqual(parse_feed(atom, 'Atom', now)[0]['url'], 'https://example.org/atom')
+
+    def test_model_response_variants(self):
+        items = [dict(title='A', url='https://example.org/a'), dict(title='B', url='https://example.org/b')]
+        stories = [dict(index=i, en='x' * 250, ko='한' * 200) for i in range(2)]
+        for raw in (json.dumps(stories), '```json\n' + json.dumps(stories) + '\n```'):
+            text = parse_generation(dict(result=raw), items)
+            self.assertIn('KR:', text)
+            self.assertLess(len(text.encode('utf-16-le')) // 2, 4000)
+        for raw in ('not JSON', '{}', '[null]'):
+            with self.assertRaises((ValueError, TypeError)):
+                parse_generation(dict(result=raw), items)
 
     def test_message_boundaries(self):
         items = [dict(title='A', url='https://example.org/a'), dict(title='B', url='https://example.org/b')]

@@ -98,6 +98,22 @@ def render(selected, items):
     return text
 
 
+def parse_generation(response, items):
+    raw = response['result'].strip()
+    # CLI's JSON envelope can contain a Markdown fenced JSON result.
+    if raw.startswith('```'):
+        raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw, flags=re.IGNORECASE)
+    selected = json.loads(raw)
+    if not isinstance(selected, list):
+        raise ValueError("Expected a story array")
+    for story in selected:
+        # Keep the editorial limits even when the model exceeds character counts.
+        for key, limit in (('en', 220), ('ko', 180)):
+            value = plain(story[key])
+            story[key] = value if len(value) <= limit else value[:limit - 1].rstrip() + '…'
+    return render(selected, items)
+
+
 def main():
     items = collect()
     prompt = (
@@ -112,21 +128,31 @@ def main():
         + json.dumps(items, ensure_ascii=False)
     )
     env = {key: os.environ[key] for key in ('PATH', 'HOME', 'CLAUDE_CODE_OAUTH_TOKEN') if key in os.environ}
-    with tempfile.TemporaryDirectory() as cwd:
-        result = subprocess.run(
-            ['claude', '--safe-mode', '--tools', '', '--disallowedTools', 'mcp__*',
-             '--strict-mcp-config', '--no-session-persistence', '--output-format', 'json',
-             '-p', 'Produce the requested newsletter JSON from stdin.'],
-            input=prompt, text=True, capture_output=True, cwd=cwd, env=env, timeout=240,
-        )
-    try:
-        response = json.loads(result.stdout)
-        if result.returncode or response.get('is_error'):
-            raise ValueError("Generation failed")
-        selected = json.loads(response['result'])
-        text = render(selected, items)
-    except (ValueError, KeyError, TypeError):
-        raise RuntimeError("Claude did not return a valid newsletter; raw output withheld") from None
+    text = None
+    for attempt in range(3):
+        with tempfile.TemporaryDirectory() as cwd:
+            try:
+                result = subprocess.run(
+                    ['claude', '--safe-mode', '--tools', '', '--disallowedTools', 'mcp__*',
+                     '--strict-mcp-config', '--no-session-persistence', '--output-format', 'json',
+                     '-p', 'Produce the requested newsletter JSON from stdin.'],
+                    input=prompt, text=True, capture_output=True, cwd=cwd, env=env, timeout=120,
+                )
+            except subprocess.TimeoutExpired:
+                print(f"Generation attempt {attempt + 1}: timed out")
+                continue
+        try:
+            response = json.loads(result.stdout)
+            if result.returncode or response.get('is_error'):
+                raise ValueError("Generation failed")
+            text = parse_generation(response, items)
+            break
+        except (ValueError, KeyError, TypeError, AttributeError):
+            # Never log model output: it may contain credentials or untrusted feed text.
+            print(f"Generation attempt {attempt + 1}: invalid response; retrying")
+            prompt += "\nYour previous response failed validation. Return only the JSON array; use short summaries."
+    if text is None:
+        raise RuntimeError("Claude did not return a valid newsletter after three attempts; raw output withheld")
     Path('tech-newsletter.txt').write_text(text, encoding='utf-8')
     body = dict(chat_id=os.environ['TELEGRAM_CHAT_ID'], text=text, disable_web_page_preview=True)
     if os.environ.get('TELEGRAM_MESSAGE_THREAD_ID'):
